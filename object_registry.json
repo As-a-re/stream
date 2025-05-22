@@ -1,0 +1,9 @@
+{
+  "reviews": "0xREVIEWS_OBJECT_ID",
+  "users": {
+    "0xdedef1d507c9be500c5702be259a1dea45ccbbd7ca58c86ab8e31d169cf07a2e": {
+      "library": "0xUSERLIBRARY_OBJECT_ID",
+      "watchlist": "0xWATCHLIST_OBJECT_ID"
+    }
+  }
+}
