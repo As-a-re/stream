@@ -27,10 +27,10 @@ export default function RootLayout({
       <body className={inter.className}>
         <WalletProvider autoConnect>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-            <WalletProvider>
+            <WalletProviderContext>
               <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
               <Toaster />
-            </WalletProvider>
+            </WalletProviderContext>
           </ThemeProvider>
         </WalletProvider>
         <Analytics />
