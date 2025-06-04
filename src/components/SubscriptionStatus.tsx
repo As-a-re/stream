@@ -1,13 +1,14 @@
 import { useSubscription } from '@/services/subscriptionService';
-import { useWalletContext } from '@/providers/WalletProvider';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Check, X, Clock, Zap, Star, Crown } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils';
 
 export const SubscriptionStatus = () => {
-  const { address } = useWalletContext();
-  const { data: subscription, isLoading, refetch } = useSubscription().useSubscriptionStatus();
+  const currentAccount = useCurrentAccount();
+  const address = currentAccount?.address;
+  const { data: subscription, isLoading } = useSubscription().useSubscriptionStatus();
   
   if (!address) {
     return (

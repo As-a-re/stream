@@ -1,4 +1,4 @@
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { toast } from 'sonner';
 
 // Type for transaction result
@@ -29,8 +29,8 @@ interface TransactionOptions {
   errorMessage?: string;
 }
 
-type SignAndExecuteTransactionBlock = (input: {
-  transactionBlock: Uint8Array | string | TransactionBlock;
+type SignAndExecuteTransaction = (input: {
+  transaction: Uint8Array | string | Transaction;
   options?: {
     showEffects?: boolean;
     showEvents?: boolean;
@@ -39,9 +39,13 @@ type SignAndExecuteTransactionBlock = (input: {
   };
 }) => Promise<TransactionResult>;
 
+export const createTransactionBlock = (): Transaction => {
+  return new Transaction();
+};
+
 export const executeTransaction = async (
-  txb: TransactionBlock,
-  signAndExecuteTransactionBlock: SignAndExecuteTransactionBlock,
+  tx: Transaction,
+  signAndExecuteTransaction: SignAndExecuteTransaction,
   options: TransactionOptions = {}
 ): Promise<{ success: boolean; result?: any; error?: string }> => {
   const {
@@ -58,11 +62,11 @@ export const executeTransaction = async (
 
   try {
     // Set the gas budget
-    txb.setGasBudget(100000000); // 0.1 SUI
+    tx.setGasBudget(100000000); // 0.1 SUI
     
     // Execute the transaction
-    const result = await signAndExecuteTransactionBlock({
-      transactionBlock: txb,
+    const result = await signAndExecuteTransaction({
+      transaction: tx,
       options: {
         showEffects: true,
         showEvents: true,
@@ -91,21 +95,21 @@ export const executeTransaction = async (
 
 // Helper function to create a subscription transaction
 export const createSubscriptionTx = (
-  txb: TransactionBlock,
+  txb: Transaction,
   tier: number,
   payment: any // Payment coin object from splitCoins
-): TransactionBlock => {
+): Transaction => {
   const packageId = getPackageId();
   const platformWallet = getPlatformWallet();
   
   // Transfer payment to platform wallet
-  txb.transferObjects([payment], txb.pure(platformWallet));
+  txb.transferObjects([payment], txb.pure.address(platformWallet));
   
   // Call the subscribe function in the smart contract
   txb.moveCall({
     target: `${packageId}::suistream::subscribe`,
     arguments: [
-      txb.pure(tier), // tier: u8
+      txb.pure.u8(tier), // tier: u8
     ],
   });
   
@@ -117,9 +121,9 @@ export const createSubscriptionTx = (
 
 // Helper function to cancel a subscription
 export const createCancelSubscriptionTx = (
-  txb: TransactionBlock,
+  txb: Transaction,
   subscriptionId: string
-): TransactionBlock => {
+): Transaction => {
   const packageId = getPackageId();
   
   // Call the cancel_subscription function in the smart contract
@@ -138,23 +142,23 @@ export const createCancelSubscriptionTx = (
 
 // Helper function to renew a subscription
 export const createRenewSubscriptionTx = (
-  txb: TransactionBlock,
+  txb: Transaction,
   subscriptionId: string,
   payment: any, // Payment coin object from splitCoins
   months = 1
-): TransactionBlock => {
+): Transaction => {
   const packageId = getPackageId();
   const platformWallet = getPlatformWallet();
   
   // Transfer payment to platform wallet
-  txb.transferObjects([payment], txb.pure(platformWallet));
+  txb.transferObjects([payment], txb.pure.address(platformWallet));
   
   // Call the renew_subscription function in the smart contract
   txb.moveCall({
     target: `${packageId}::suistream::renew_subscription`,
     arguments: [
       txb.object(subscriptionId), // subscription: &mut Subscription
-      txb.pure(months), // months: u64
+      txb.pure.u64(months), // months: u64
     ],
   });
   

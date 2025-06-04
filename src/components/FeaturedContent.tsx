@@ -56,7 +56,7 @@ const FeaturedContent = () => {
     }
   ];
 
-  const ContentCard = ({ item, index }: { item: any, index: number }) => (
+  const ContentCard = ({ item }: { item: any }) => (
     <Card className="glass-card group cursor-pointer hover:scale-105 transition-all duration-300 overflow-hidden">
       <div className="relative">
         <img 
@@ -97,7 +97,7 @@ const FeaturedContent = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {featuredMovies.map((movie, index) => (
               <div key={movie.title} className="animate-fade-in-up" style={{animationDelay: `${index * 0.1}s`}}>
-                <ContentCard item={movie} index={index} />
+                <ContentCard item={movie} />
               </div>
             ))}
           </div>
@@ -115,7 +115,7 @@ const FeaturedContent = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {tvShows.map((show, index) => (
               <div key={show.title} className="animate-fade-in-up" style={{animationDelay: `${index * 0.1}s`}}>
-                <ContentCard item={show} index={index} />
+                <ContentCard item={show} />
               </div>
             ))}
           </div>

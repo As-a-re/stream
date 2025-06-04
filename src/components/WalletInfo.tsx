@@ -1,13 +1,15 @@
-import { useWallet } from '@suiet/wallet-kit';
-import { useWalletContext } from '@/providers/WalletProvider';
+import { useCurrentAccount, useDisconnectWallet } from '@mysten/dapp-kit';
 import { Button } from '@/components/ui/button';
 import { LogOut, Copy, ExternalLink } from 'lucide-react';
 import { formatAddress } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export const WalletInfo = () => {
-  const { address, disconnect } = useWallet();
-  const { balance } = useWalletContext();
+  const currentAccount = useCurrentAccount();
+  const address = currentAccount?.address;
+  const { mutate: disconnect } = useDisconnectWallet();
+  // TODO: Replace with useSuiClientQuery for balance
+  const balance = null; // Placeholder
 
   const handleCopyAddress = () => {
     if (!address) return;
@@ -20,7 +22,7 @@ export const WalletInfo = () => {
     window.open(`https://suiexplorer.com/address/${address}?network=testnet`, '_blank');
   };
 
-  if (!address) return null;
+  if (!currentAccount) return null;
 
   return (
     <div className="bg-background/50 backdrop-blur-sm border border-border/50 rounded-lg p-4 space-y-3">
@@ -66,6 +68,11 @@ export const WalletInfo = () => {
         
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Balance</span>
+          {currentAccount?.label && (
+            <span className="text-sm text-muted-foreground">
+              ({currentAccount.label})
+            </span>
+          )}
           <span className="font-mono text-sm">{balance} SUI</span>
         </div>
       </div>

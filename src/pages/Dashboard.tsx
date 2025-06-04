@@ -1,31 +1,47 @@
-import { useState } from 'react';
-import { useWallet } from '@suiet/wallet-kit';
-import { useToast } from '@/hooks/use-toast';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { SubscriptionStatus } from '@/components/SubscriptionStatus';
 import { WalletInfo } from '@/components/WalletInfo';
 import { useSubscription } from '@/services/subscriptionService';
-import { ContentRow } from '@/components/ContentRow';
+import ContentRow from '@/components/ContentRow';
+import { type ContentItem } from '@/lib/api';
 
 const Dashboard = () => {
-  const { connected, address } = useWallet();
-  const { toast } = useToast();
+  const currentAccount = useCurrentAccount();
+  const isConnected = !!currentAccount;
   const { data: subscription, isLoading } = useSubscription().useSubscriptionStatus();
 
   // Mock data for demonstration
-  const trendingContent = [
+  const trendingContent: ContentItem[] = [
     {
       id: 1,
       title: 'Blockchain Revolution',
+      name: 'Blockchain Revolution',
       poster_path: '/placeholder-movie.jpg',
+      backdrop_path: '/placeholder-backdrop.jpg',
+      overview: 'A documentary about the blockchain revolution and its impact on technology.',
+      vote_average: 8.5,
+      media_type: 'movie',
+      release_date: '2023-06-15',
       isExclusive: true,
-      requiredTier: 2,
+      price: '9.99',
+      year: '2023',
+      image: '/placeholder-movie.jpg'
     },
-    // Add more content items as needed
   ];
 
-  if (!connected || !address) {
+  // Helper function to get subscription tier name
+  const getTierName = (tier: number) => {
+    switch (tier) {
+      case 1: return 'Basic';
+      case 2: return 'Premium';
+      case 3: return 'Ultimate';
+      default: return 'Unknown';
+    }
+  };
+
+  if (!isConnected || !currentAccount) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
         <div className="container mx-auto px-4 py-20 text-center">
@@ -65,15 +81,20 @@ const Dashboard = () => {
               ) : subscription?.isActive ? (
                 <div className="space-y-4">
                   <p className="text-muted-foreground">
-                    You're currently on the <span className="font-medium text-foreground">
-                      {subscription.tier === 1 ? 'Basic' : subscription.tier === 2 ? 'Premium' : 'Ultimate'}
-                    </span> plan.
+                    You're currently on the{' '}
+                    <span className="font-medium text-foreground">
+                      {getTierName(subscription.tier)}
+                    </span>{' '}
+                    plan.
                   </p>
-                  <div className="bg-muted/50 p-4 rounded-md">
-                    <p className="text-sm text-muted-foreground">
-                      Your subscription will renew in {Math.ceil((subscription.expiresAt * 1000 - Date.now()) / (1000 * 60 * 60 * 24))} days
-                    </p>
-                  </div>
+                  {subscription.expiresAt && (
+                    <div className="bg-muted/50 p-4 rounded-md">
+                      <p className="text-sm text-muted-foreground">
+                        Your subscription will renew in{' '}
+                        {Math.ceil((subscription.expiresAt * 1000 - Date.now()) / (1000 * 60 * 60 * 24))} days
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">

@@ -1,24 +1,22 @@
 import { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Lock } from 'lucide-react';
-import { useContentAccess } from '@/services/subscriptionService';
+import { useContentAccess, SubscriptionTier } from '@/hooks/useContentAccess';
 import { useWalletContext } from '@/providers/WalletProvider';
 
 interface ContentAccessWrapperProps {
   children: ReactNode;
-  contentId: string;
-  requiredTier?: number;
+  requiredTier?: SubscriptionTier;
   showUpgradePrompt?: boolean;
 }
 
 export const ContentAccessWrapper = ({
   children,
-  contentId,
   requiredTier = 1,
   showUpgradePrompt = true,
 }: ContentAccessWrapperProps) => {
   const { isConnected } = useWalletContext();
-  const { hasAccess, isLoading, subscriptionTier } = useContentAccess(contentId, requiredTier);
+  const { hasAccess, isLoading } = useContentAccess(requiredTier); // Removed subscriptionTier as it's unused and causing a type error to be investigated
 
   // If still loading, show a loading state or the content with a blur overlay
   if (isLoading) {
@@ -52,7 +50,6 @@ export const ContentAccessWrapper = ({
               {isConnected
                 ? 'Upgrade your subscription to access this content.'
                 : 'Connect your wallet and subscribe to access premium content.'}
-              }
             </p>
             {isConnected ? (
               <Button className="w-full" onClick={() => {

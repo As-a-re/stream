@@ -1,44 +1,30 @@
 import { useState } from 'react';
-import { useWallet } from '@suiet/wallet-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { useSubscription } from '@/services/subscriptionService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { createSubscriptionTx, createCancelSubscriptionTx, createRenewSubscriptionTx } from '@/lib/transactions';
+import { createCancelSubscriptionTx, createRenewSubscriptionTx } from '@/lib/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { toast } from 'sonner';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+
+// Utility function for formatting dates
+const formatDate = (date: Date) => date.toLocaleDateString();
+const formatRelativeTime = (timestamp: number) => {
+  const now = Date.now();
+  const diff = timestamp * 1000 - now;
+  if (diff <= 0) return 'expired';
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return `${days} day${days !== 1 ? 's' : ''} left`;
+};
 
 export const SubscriptionManagement = () => {
-  const { address, signAndExecuteTransactionBlock } = useWallet();
+  const currentAccount = useCurrentAccount();
+  const address = currentAccount?.address;
+  const { mutateAsync: signAndExecuteDappKit } = useSignAndExecuteTransaction();
   const { data: subscription, isLoading, refetch } = useSubscription().useSubscriptionStatus();
   const [isProcessing, setIsProcessing] = useState(false);
   const [renewMonths, setRenewMonths] = useState(1);
-
-  const handleSubscribe = async (tier: number, months: number = 1) => {
-    if (!address) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const txb = createSubscriptionTx(new TransactionBlock(), tier, months);
-      
-      await signAndExecuteTransactionBlock({
-        transactionBlock: txb,
-      });
-      
-      toast.success('Subscription successful!');
-      await refetch();
-    } catch (error) {
-      console.error('Subscription error:', error);
-      toast.error('Failed to subscribe', {
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleCancel = async () => {
     if (!address || !subscription?.id) return;
@@ -48,10 +34,11 @@ export const SubscriptionManagement = () => {
 
     setIsProcessing(true);
     try {
-      const txb = createCancelSubscriptionTx(new TransactionBlock(), subscription.id);
+      const txb = createCancelSubscriptionTx(new Transaction(), String(subscription.id));
+      // TODO: Consolidate wallet providers to @mysten/dapp-kit to properly fix TransactionBlock type issues.
       
-      await signAndExecuteTransactionBlock({
-        transactionBlock: txb,
+      await signAndExecuteDappKit({
+        transaction: txb,
       });
       
       toast.success('Subscription cancelled successfully');
@@ -71,10 +58,11 @@ export const SubscriptionManagement = () => {
     
     setIsProcessing(true);
     try {
-      const txb = createRenewSubscriptionTx(new TransactionBlock(), subscription.id, renewMonths);
+      const txb = createRenewSubscriptionTx(new Transaction(), String(subscription.id), renewMonths);
+      // TODO: Consolidate wallet providers to @mysten/dapp-kit to properly fix TransactionBlock type issues.
       
-      await signAndExecuteTransactionBlock({
-        transactionBlock: txb,
+      await signAndExecuteDappKit({
+        transaction: txb,
       });
       
       toast.success(`Subscription renewed for ${renewMonths} month${renewMonths > 1 ? 's' : ''}!`);
@@ -141,17 +129,7 @@ export const SubscriptionManagement = () => {
                   {formatDate(expiryDate)} ({formatRelativeTime(expiryDate.getTime() / 1000)})
                 </span>
               </div>
-              {subscription?.autoRenew ? (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Auto-Renew</span>
-                  <span className="text-sm">Enabled</span>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Auto-Renew</span>
-                  <span className="text-sm">Disabled</span>
-                </div>
-              )}
+              
             </div>
           </div>
         )}

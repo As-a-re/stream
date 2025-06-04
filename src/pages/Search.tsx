@@ -1,58 +1,35 @@
 import { useState } from "react"
-import { useWallet } from "../contexts/WalletContext"
-import WalletConnect from "../components/WalletConnect"
-import Navbar from "../components/Navbar"
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import SearchBar from "../components/SearchBar"
 import SearchResults from "../components/SearchResults"
-import { useToast } from "../hooks/use-toast"
 
 const Search = () => {
-  const [showWalletModal, setShowWalletModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const { connected, account } = useWallet()
-  const { toast } = useToast()
-
+  const currentAccount = useCurrentAccount();
+  const isConnected = !!currentAccount;
+  
   const handleSearch = (query: string) => {
     setSearchQuery(query)
     // Search logic will be handled by SearchResults component
   }
-
+  
   return (
     <div className="bg-[#0f172a] min-h-screen text-white">
-      <Navbar onConnectWallet={() => setShowWalletModal(true)} />
-      
       <main className="container mx-auto px-4 py-8">
-        {connected && account ? (
-          <>
-            <SearchBar onSearch={handleSearch} />
-            <SearchResults query={searchQuery} />
-          </>
+        <div className="mb-8">
+          <SearchBar onSearch={handleSearch} />
+        </div>
+        
+        {isConnected && currentAccount ? (
+          <SearchResults query={searchQuery} />
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
             <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-gray-400 mb-6">Connect your wallet to search content</p>
-            <button
-              onClick={() => setShowWalletModal(true)}
-              className="bg-neon-pink hover:bg-neon-pink/90 text-white font-bold py-2 px-6 rounded-full transition-colors"
-            >
-              Connect Wallet
-            </button>
+            <p className="text-gray-400 mb-6">Connect your wallet to search for content</p>
+            <ConnectButton />
           </div>
         )}
       </main>
-
-
-      <WalletConnect
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        onSuccess={(address) => {
-          toast({
-            title: "Wallet Connected",
-            description: `Connected to ${address.slice(0, 6)}...${address.slice(-4)}`,
-          })
-          setShowWalletModal(false)
-        }}
-      />
     </div>
   )
 }

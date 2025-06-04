@@ -1,7 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { WalletProvider as SuietWalletProvider } from '@suiet/wallet-kit';
-import '@suiet/wallet-kit/style.css';
 import "@radix-ui/themes/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
@@ -24,9 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Theme appearance="dark">
       <QueryClientProvider client={queryClient}>
-        <SuietWalletProvider>
           <App />
-        </SuietWalletProvider>
       </QueryClientProvider>
     </Theme>
   </React.StrictMode>,

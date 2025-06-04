@@ -1,54 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Star } from 'lucide-react';
 import { useSubscription, SubscriptionTier } from '@/services/subscriptionService';
-import { useWallet } from '@suiet/wallet-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { toast } from 'sonner';
 
 const SubscriptionPlans = () => {
-  const { connected: isConnected, address } = useWallet();
-  const { subscribe, subscription, isLoading, tiers } = useSubscription();
+  const currentAccount = useCurrentAccount();
+  const isConnected = !!currentAccount;
+  const address = currentAccount?.address;
+  const { subscribe, tiers, useSubscriptionStatus } = useSubscription();
+  const { data: subscription, isLoading } = useSubscriptionStatus();
   const [isSubscribing, setIsSubscribing] = useState<SubscriptionTier | null>(null);
-  const [balance, setBalance] = useState('0');
-  
-  // Get the wallet's balance
-  const fetchBalance = async () => {
-    if (!isConnected || !address) return '0';
-    
-    try {
-      const response = await fetch(`https://fullnode.testnet.sui.io:443`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'suix_getBalance',
-          params: [address],
-        }),
-      });
-      
-      const data = await response.json();
-      return data.result?.totalBalance || '0';
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      return '0';
-    }
-  };
-  
-  // Fetch balance when wallet is connected or address changes
-  useEffect(() => {
-    const getAndSetBalance = async () => {
-      if (isConnected && address) {
-        const balance = await fetchBalance();
-        setBalance(balance);
-      }
-    };
-    
-    getAndSetBalance();
-  }, [isConnected, address]);
 
   const handleSubscribe = async (tier: SubscriptionTier) => {
     if (!isConnected || !address) {
@@ -67,16 +31,16 @@ const SubscriptionPlans = () => {
       return;
     }
 
-    // Check balance
-    const balanceInMist = BigInt(balance);
-    if (balanceInMist < BigInt(tierInfo.price)) {
-      toast.error(`Insufficient balance. You need at least ${tierInfo.price / 1000000000} SUI`);
-      return;
-    }
+    // TODO: Implement proper balance check with useSuiClientQuery
+    // const currentWalletBalance = accountBalance ? BigInt(accountBalance.totalBalance) : BigInt(0);
+    // if (currentWalletBalance < BigInt(tierInfo.price)) {
+    //   toast.error(`Insufficient balance. You need at least ${tierInfo.price / 1000000000} SUI`);
+    //   return;
+    // }
 
     try {
       setIsSubscribing(tier);
-      await subscribe(tier);
+      await subscribe.mutateAsync({ tier });
       toast.success(`Successfully subscribed to ${tierInfo.name} tier!`);
     } catch (error) {
       console.error('Subscription failed:', error);

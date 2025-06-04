@@ -1,24 +1,19 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useWallet } from '@suiet/wallet-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { createSubscriptionTx, createCancelSubscriptionTx, createRenewSubscriptionTx } from '@/lib/transactions';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiClient } from '@mysten/sui/client';
+import { toast } from 'sonner';
+import { getPackageId, getPlatformWallet, getFullNodeUrl } from '../config/networks.ts';
 
-// Helper function to get package ID
-const getSuistreamPackageId = (): string => {
-  return import.meta.env.VITE_NEXT_PUBLIC_SUISTREAM_PACKAGE_ID || '';
-};
-
-// Helper function to get platform wallet address
-const getPlatformWallet = (): string => {
-  return '0xdedef1d507c9be500c5702be259a1dea45ccbbd7ca58c86ab8e31d169cf07a2e';
-};
+// Initialize Sui client
+const client = new SuiClient({ url: getFullNodeUrl() });
 
 // Subscription tiers with their respective prices in MIST (1 SUI = 1_000_000_000 MIST)
 export const SUBSCRIPTION_TIERS = {
   1: {
     id: 1,
     name: 'Basic',
-    price: 1_000_000_000, // 1 SUI
+    price: 5_000_000_000, // 5 SUI
     features: [
       'Access to basic content',
       'SD quality streaming',
@@ -28,7 +23,7 @@ export const SUBSCRIPTION_TIERS = {
   2: {
     id: 2,
     name: 'Premium',
-    price: 5_000_000_000, // 5 SUI
+    price: 10_000_000_000, // 10 SUI
     features: [
       'Access to all basic content',
       'HD quality streaming',
@@ -39,7 +34,7 @@ export const SUBSCRIPTION_TIERS = {
   3: {
     id: 3,
     name: 'Ultimate',
-    price: 10_000_000_000, // 10 SUI
+    price: 15_000_000_000, // 15 SUI
     features: [
       'Access to all content',
       '4K + HDR quality',
@@ -62,215 +57,241 @@ export interface Subscription {
   autoRenew: boolean;
 }
 
-export const useSubscription = () => {
-  const { address, signAndExecuteTransactionBlock } = useWallet();
-  const queryClient = useQueryClient();
+interface SubscriptionResponse {
+  data: {
+    id: string;
+    tier: number;
+    user_address: string;
+    start_date: string;
+    expiry_date: string;
+    is_active: boolean;
+    auto_renew: boolean;
+  } | null;
+}
 
-  // Get subscription status
-  const { data: subscription, isLoading, refetch } = useQuery<Subscription | null>({
-    queryKey: ['subscription', address],
-    queryFn: async () => {
-      if (!address) return null;
-      
-      try {
-        // Get the package ID
-        const packageId = getSuistreamPackageId();
-        if (!packageId) {
-          console.error('Package ID not configured');
+export const useSubscription = () => {
+  const currentAccount = useCurrentAccount();
+  const currentAddress = currentAccount?.address;
+  const { mutateAsync: actualSignAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const queryClient = useQueryClient();
+  const packageId = getPackageId();
+  const platformWallet = getPlatformWallet();
+
+  // Get the current user's subscription
+  const useSubscriptionStatus = () => {
+    return useQuery<Subscription | null>({
+      queryKey: ['subscription', currentAddress],
+      queryFn: async () => {
+        if (!currentAddress) return null;
+        
+        try {
+          // Fetch the user's subscription from the blockchain
+          const txbInspect = new Transaction();
+          txbInspect.moveCall({
+            target: `${packageId}::suistream::get_subscription`,
+            arguments: [
+              txbInspect.pure.address(currentAddress!), // user_address: address
+            ],
+          });
+          const result = await client.devInspectTransactionBlock({
+            transactionBlock: txbInspect,
+            sender: currentAddress!,
+          });
+
+          // Parse the subscription data
+          if (result.effects.status.status === 'success' && result.events) {
+            const subscriptionEvent = result.events.find(
+              (event) => event.type.endsWith('::SubscriptionEvent')
+            );
+
+            if (subscriptionEvent) {
+              const subscriptionData = subscriptionEvent.parsedJson as SubscriptionResponse['data'];
+              
+              if (!subscriptionData) return null;
+              
+              return {
+                id: subscriptionData.id,
+                tier: subscriptionData.tier as SubscriptionTier,
+                userAddress: subscriptionData.user_address,
+                startDate: Math.floor(new Date(subscriptionData.start_date).getTime() / 1000),
+                expiresAt: Math.floor(new Date(subscriptionData.expiry_date).getTime() / 1000),
+                isActive: subscriptionData.is_active,
+                autoRenew: subscriptionData.auto_renew,
+              };
+            }
+          }
+          
+          return null;
+        } catch (error) {
+          console.error('Error fetching subscription:', error);
           return null;
         }
-
-        // In a real app, you would query the blockchain for the user's subscription
-        // For now, we'll simulate a subscription
-        return {
-          id: 'simulated-subscription-id',
-          tier: 1 as const,
-          userAddress: address,
-          startDate: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
-          expiresAt: Math.floor(Date.now() / 1000) + 2592000, // 30 days from now
-          isActive: true,
-          autoRenew: true
-        };
-      } catch (error) {
-        console.error('Error fetching subscription:', error);
-        return null;
-      }
-    },
-    enabled: !!address,
-    staleTime: 60000
-  });
-
-  // Subscribe to a plan
-  const subscribe = async (tier: SubscriptionTier) => {
-    if (!address) throw new Error('Wallet not connected');
-    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
-    
-    const txb = new TransactionBlock();
-    const tierInfo = SUBSCRIPTION_TIERS[tier];
-    
-    if (!tierInfo) {
-      throw new Error('Invalid subscription tier');
-    }
-    
-    try {
-      // Split the exact amount needed for the subscription
-      const [coin] = txb.splitCoins(txb.gas, [txb.pure(tierInfo.price)]);
-      
-      // Create and execute the subscription transaction
-      createSubscriptionTx(txb, tier, coin);
-      
-      // Execute the transaction
-      const result = await signAndExecuteTransactionBlock({
-        // @ts-ignore - Type compatibility issue
-        transactionBlock: txb as any,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
-      });
-      
-      if (result.effects.status.status !== 'success') {
-        throw new Error('Transaction failed');
-      }
-      
-      // Invalidate and refetch
-      await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
-      
-      // Refetch subscription data
-      await refetch();
-      
-      return result;
-    } catch (error) {
-      console.error('Error subscribing:', error);
-      throw error;
-    }
-  };
-  
-  // Cancel an active subscription
-  const cancelSubscription = async (subscriptionId: string) => {
-    if (!address) throw new Error('Wallet not connected');
-    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
-    
-    const txb = new TransactionBlock();
-    
-    try {
-      // Create and execute the cancel subscription transaction
-      createCancelSubscriptionTx(txb, subscriptionId);
-      
-      // Execute the transaction
-      const result = await signAndExecuteTransactionBlock({
-        // @ts-ignore - Type compatibility issue
-        transactionBlock: txb as any,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
-      });
-      
-      if (result.effects.status.status !== 'success') {
-        throw new Error('Transaction failed');
-      }
-      
-      // Invalidate and refetch
-      await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
-      
-      // Refetch subscription data
-      await refetch();
-      
-      return result;
-    } catch (error) {
-      console.error('Error canceling subscription:', error);
-      throw error;
-    }
-  };
-  
-  // Renew an existing subscription
-  const renewSubscription = async (subscriptionId: string, tier: SubscriptionTier) => {
-    if (!address) throw new Error('Wallet not connected');
-    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
-    
-    const txb = new TransactionBlock();
-    const tierInfo = SUBSCRIPTION_TIERS[tier];
-    
-    if (!tierInfo) {
-      throw new Error('Invalid subscription tier');
-    }
-    
-    try {
-      // Split the exact amount needed for the subscription
-      const [coin] = txb.splitCoins(txb.gas, [txb.pure(tierInfo.price)]);
-      
-      // Create and execute the renew subscription transaction
-      createRenewSubscriptionTx(txb, subscriptionId, coin, 1); // 1 month renewal
-      
-      // Execute the transaction
-      const result = await signAndExecuteTransactionBlock({
-        // @ts-ignore - Type compatibility issue
-        transactionBlock: txb as any,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
-      });
-      
-      if (result.effects.status.status !== 'success') {
-        throw new Error('Transaction failed');
-      }
-      
-      // Invalidate and refetch
-      await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
-      
-      // Refetch subscription data
-      await refetch();
-      
-      return result;
-    } catch (error) {
-      console.error('Error renewing subscription:', error);
-      throw error;
-    }
-  };
-
-  // Get subscription status (simplified)
-  const useSubscriptionStatus = () => {
-    return useQuery({
-      queryKey: ['subscriptionStatus', address],
-      queryFn: async () => {
-        if (!subscription) return null;
-        
-        // In a real app, you would query the blockchain for the latest status
-        return {
-          isActive: subscription.isActive,
-          expiresAt: subscription.expiresAt,
-          daysRemaining: Math.ceil((subscription.expiresAt * 1000 - Date.now()) / (1000 * 60 * 60 * 24)),
-        };
       },
-      enabled: !!subscription && !!address,
-      refetchInterval: 60000, // Check every minute
+      enabled: !!currentAddress,
+      refetchInterval: 60000, // Refetch every minute
     });
   };
 
+  // Subscribe to a plan
+  const subscribe = useMutation({
+    mutationFn: async ({ tier, months = 1 }: { tier: SubscriptionTier; months?: number }) => {
+      if (!currentAddress) throw new Error('Wallet not connected');
+      
+      const txb = new Transaction();
+      const tierPrice = SUBSCRIPTION_TIERS[tier].price * months;
+      
+      // Transfer SUI to the platform wallet
+      const [coin] = txb.splitCoins(txb.gas, [txb.pure.u64(tierPrice)]);
+      txb.transferObjects([coin], txb.pure.address(platformWallet));
+      
+      // Call the subscribe function in the smart contract
+      txb.moveCall({
+        target: `${packageId}::suistream::subscribe`,
+        arguments: [
+          txb.object(platformWallet), // platform: &mut SuiStream
+          txb.pure.u64(months), // months: u64
+          txb.pure.u8(tier), // tier: u8
+        ],
+      });
+      
+      // Sign and execute the transaction
+      const result = await actualSignAndExecuteTransaction({
+        transaction: txb as any,
+      });
+      
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Subscription successful!');
+      queryClient.invalidateQueries({ queryKey: ['subscription', currentAddress] });
+    },
+    onError: (error: Error) => {
+      toast.error('Subscription failed', {
+        description: error.message,
+      });
+    },
+  });
+
+  // Cancel subscription
+  const cancelSubscription = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      if (!currentAddress) throw new Error('Wallet not connected');
+      
+      const txb = new Transaction();
+      
+      // Call the cancel_subscription function in the smart contract
+      txb.moveCall({
+        target: `${packageId}::suistream::cancel_subscription`,
+        arguments: [
+          txb.object(subscriptionId), // subscription: &mut Subscription
+        ],
+      });
+      
+      // Sign and execute the transaction
+      const result = await actualSignAndExecuteTransaction({
+        transaction: txb as any,
+      });
+      
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Subscription cancelled successfully');
+      queryClient.invalidateQueries({ queryKey: ['subscription', currentAddress] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to cancel subscription', {
+        description: error.message,
+      });
+    },
+  });
+
+  // Renew subscription
+  const renewSubscription = useMutation({
+    mutationFn: async ({ subscriptionId, months = 1 }: { subscriptionId: string; months?: number }) => {
+      if (!currentAddress) throw new Error('Wallet not connected');
+      
+      const txb = new Transaction();
+      const tier = 1; // Default tier, adjust based on your logic
+      const tierPrice = SUBSCRIPTION_TIERS[tier].price * months;
+      
+      // Transfer SUI to the platform wallet
+      const [coin] = txb.splitCoins(txb.gas, [txb.pure.u64(tierPrice)]);
+      txb.transferObjects([coin], txb.pure.address(platformWallet));
+      
+      // Call the renew_subscription function in the smart contract
+      txb.moveCall({
+        target: `${packageId}::suistream::renew_subscription`,
+        arguments: [
+          txb.object(subscriptionId), // subscription: &mut Subscription
+          txb.pure.u64(months), // months: u64
+        ],
+      });
+      
+      // Sign and execute the transaction
+      const result = await actualSignAndExecuteTransaction({
+        transaction: txb as any,
+      });
+      
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Subscription renewed successfully');
+      queryClient.invalidateQueries({ queryKey: ['subscription', currentAddress] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to renew subscription', {
+        description: error.message,
+      });
+    },
+  });
+
+  // Toggle auto-renewal
+  const toggleAutoRenewal = useMutation({
+    mutationFn: async ({ subscriptionId, autoRenew }: { subscriptionId: string; autoRenew: boolean }) => {
+      if (!currentAddress) throw new Error('Wallet not connected');
+      
+      const txb = new Transaction();
+      
+      // Call the set_auto_renew function in the smart contract
+      txb.moveCall({
+        target: `${packageId}::suistream::set_auto_renew`,
+        arguments: [
+          txb.object(subscriptionId), // subscription: &mut Subscription
+          txb.pure.bool(autoRenew), // auto_renew: bool
+        ],
+      });
+      
+      // Sign and execute the transaction
+      const result = await actualSignAndExecuteTransaction({
+        transaction: txb as any,
+      });
+      
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Auto-renewal settings updated');
+      queryClient.invalidateQueries({ queryKey: ['subscription', currentAddress] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to update auto-renewal settings', {
+        description: error.message,
+      });
+    },
+  });
+
+  // Check if user has access to content
+  const hasAccess = (contentTier: SubscriptionTier, userTier?: SubscriptionTier) => {
+    if (!userTier) return false;
+    return userTier >= contentTier;
+  };
+
   return {
+    useSubscriptionStatus,
     subscribe,
     cancelSubscription,
     renewSubscription,
-    useSubscriptionStatus,
-    subscription: subscription || null,
-    isLoading,
-    refetch,
-    tiers: SUBSCRIPTION_TIERS
+    toggleAutoRenewal,
+    hasAccess,
+    tiers: SUBSCRIPTION_TIERS,
   };
-};
-
-// Hook to check if user has access to content based on their subscription tier
-export const useContentAccess = (requiredTier: SubscriptionTier = 1) => {
-  const { subscription } = useSubscription();
-  
-  if (!subscription) {
-    return { hasAccess: false, isLoading: true };
-  }
-  
-  // User has access if their subscription tier is equal to or higher than required
-  const hasAccess = subscription.tier >= requiredTier;
-  
-  return { hasAccess, isLoading: false };
 };

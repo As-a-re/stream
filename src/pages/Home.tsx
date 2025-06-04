@@ -4,14 +4,14 @@ import HeroSection from "../components/HeroSection"
 import ContentRow from "../components/ContentRow"
 import FeatureSection from "../components/FeatureSection"
 import Footer from "../components/Footer"
-import WalletConnect from "../components/WalletConnect"
+
 import { fetchTrending, fetchMovies, fetchTVShows, type ContentItem } from "../lib/api"
 import { useToast } from "../hooks/use-toast"
 import { Skeleton } from "../components/ui/skeleton"
-import { useWallet } from "../contexts/WalletContext"
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 
 const Index = () => {
-  const [showWalletModal, setShowWalletModal] = useState(false)
+  
   const [trendingContent, setTrendingContent] = useState<ContentItem[]>([])
   const [movies, setMovies] = useState<ContentItem[]>([])
   const [tvShows, setTVShows] = useState<ContentItem[]>([])
@@ -19,7 +19,8 @@ const Index = () => {
   const [featuredContent, setFeaturedContent] = useState<ContentItem | undefined>(undefined)
 
   const { toast } = useToast()
-  const { connected, account } = useWallet()
+  const currentAccount = useCurrentAccount();
+  const connected = !!currentAccount;
 
   useEffect(() => {
     const loadData = async () => {
@@ -52,15 +53,6 @@ const Index = () => {
     loadData()
   }, [toast])
 
-  // Listen for wallet modal events
-  useEffect(() => {
-    const handleOpenWalletModal = () => setShowWalletModal(true)
-    document.addEventListener("open-wallet-modal", handleOpenWalletModal)
-
-    return () => {
-      document.removeEventListener("open-wallet-modal", handleOpenWalletModal)
-    }
-  }, [])
 
   // Get exclusive NFT content (items with isExclusive=true)
   const exclusiveContent = [
@@ -71,7 +63,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-sui-dark text-white">
-      <Navbar onConnectWallet={() => setShowWalletModal(true)} isConnected={connected} />
+      <Navbar />
 
       {loading ? (
         <div className="pt-16">
@@ -126,27 +118,10 @@ const Index = () => {
       <FeatureSection />
       <Footer />
 
-      <WalletConnect 
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        onSuccess={(address) => {
-          toast({
-            title: "Wallet Connected",
-            description: `Connected to ${address.slice(0, 6)}...${address.slice(-4)}`,
-          })
-          setShowWalletModal(false)
-        }}
-      />
-
       {/* Floating Connect Button for Mobile */}
       {!connected && (
-        <div className="md:hidden fixed bottom-6 right-6">
-          <button
-            onClick={() => setShowWalletModal(true)}
-            className="bg-sui-blue rounded-full p-4 text-white shadow-lg hover:bg-sui-blue-dark transition-colors"
-          >
-            Connect Wallet
-          </button>
+        <div className="md:hidden fixed bottom-6 right-6 z-50">
+          <ConnectButton />
         </div>
       )}
     </div>
