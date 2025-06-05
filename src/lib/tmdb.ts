@@ -1,5 +1,5 @@
 // TMDB API utility
-const API_KEY = "e8600999e10a7ace8d8f0c0fcdeadaae";
+const API_KEY = "";
 const BASE_URL = "https://api.themoviedb.org/3";
 
 export const fetchTrending = async (type = "all", time = "day") => {
