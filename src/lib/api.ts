@@ -2,7 +2,7 @@
 import { toast } from "@/hooks/use-toast"
 
 // TMDB API key (you would typically store this in environment variables)
-const API_KEY = "e8600999e10a7ace8d8f0c0fcdeadaae" // Updated with provided API key
+const API_KEY = "" // Updated with provided API key
 const BASE_URL = "https://api.themoviedb.org/3"
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
